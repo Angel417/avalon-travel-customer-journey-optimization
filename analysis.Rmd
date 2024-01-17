@@ -1,0 +1,390 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+PRELIM DATA CHECK
+```{r}
+# Load in libraries
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(skimr)
+library(psych)
+library(Hmisc)
+library(corrplot)
+library(naniar)
+library(GGally)
+library(janitor)
+library(scales)
+
+# Load in clean data sets for journeys, customers
+journeys <- read_csv("journeys_clean.csv")
+customers <- read_csv("customers_clean.csv")
+
+# Quick check both data frames
+head(journeys)
+head(customers)
+
+# Check missing values
+journeys %>% gg_miss_var()
+customers %>% gg_miss_var()
+
+# Summaries of basic descriptives of numeric data
+journeys %>% psych::describe()
+customers %>% psych::describe()
+```
+
+DROP UNNECESSARY COLUMNS
+```{r}
+# Journeys
+journeys %>%
+  select(-purchase_own, -purchase_any, -purchase_competitor) -> journeys
+
+# Customers
+customers %>%
+  select(-...1) -> customers
+
+```
+
+
+UNIVARIATE - BASIC SUMMARY STATISTICS
+```{r}
+# Journey duration
+journeys %>%
+  summarise(mean_duration = mean(duration),
+            med_duration = median(duration),
+            dev_duration = sd(duration),
+            min_duration = min(duration),
+            max_duration = max(duration))
+
+# Age
+customers %>%
+  summarise(mean_age = mean(Age),
+            med_age = median(Age),
+            dev_age = sd(Age),
+            min_age = min(Age),
+            max_age = max(Age))
+
+# Children per household
+customers %>%
+  summarise(mean_children = mean(children_per_household),
+            med_children = median(children_per_household),
+            dev_children = sd(children_per_household),
+            min_children = min(children_per_household),
+            max_children = max(children_per_household))
+
+```
+
+
+UNIVARIATE - COUNT USERS, JOURNEYS, CONVERSIONS
+```{r}
+# Users - 9678 unique 
+journeys %>%
+  select(UserID) %>%
+  n_distinct()
+
+# Purchase journeys - 29012 unique
+journeys %>%
+  select(journeyID) %>%
+  n_distinct()
+
+# Bookings at own agency - 162
+journeys %>%
+  filter(purchase == "Own") %>%
+  select(UserID) %>%
+  n_distinct()
+
+# Bookings at competitor agencies - 2830
+journeys %>%
+  filter(purchase == "Competitor") %>%
+  select(UserID) %>%
+  n_distinct()
+
+```
+
+UNIVARIATE - CUSTOMER DEMOGRAPHICS
+```{r}
+# Region - West and South most common
+customers %>%
+  tabyl(region) %>%
+  drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(region, n)), fill = "#1a6b89") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Customer Regions",
+    x = "Region",
+    y = "Customers")
+  
+# Municipality size - Most common between 20,000 ~ 100,000 (< 500,000)
+customers %>%
+  tabyl(municipality_size) %>%
+  drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(municipality_size, n)), fill = "#1a6b89") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Municipality Sizes",
+    x = "Size Category",
+    y = "Customers")
+
+# Household size - Over 60% of all customers are either single or have 2 people in household
+# Additional ~14% have 3 people
+customers %>% 
+  tabyl(household_size) %>%
+  adorn_pct_formatting(digits = 2) %>% 
+  adorn_totals()
+
+# Gender - 60% female
+customers %>% 
+  tabyl(GenderID) %>%
+  adorn_pct_formatting(digits = 1) %>% 
+  adorn_totals()
+
+# Employment - Majority of customers are employed (regular salaried) or retired
+customers %>%
+  tabyl(employment) %>%
+  drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(employment, n)), fill = "#48c78a") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Employment Categories",
+    x = "Employment Category",
+    y = "Customers")
+
+# Income - 16% unreported; 37% of remaining users earned average to 1-2 times average wage
+customers %>% 
+  tabyl(income) %>%
+  adorn_pct_formatting(digits = 1) %>% 
+  adorn_totals()
+
+customers %>%
+  tabyl(income) %>%
+  #drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(income, n)), fill = "#48c78a") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Income",
+    x = "Income Category",
+    y = "Customers")
+
+
+# Social class - 47% of customers are middle to upper middle class
+customers %>% 
+  tabyl(social_class) %>%
+  adorn_pct_formatting(digits = 1) %>% 
+  adorn_totals()
+
+customers %>%
+  tabyl(social_class) %>%
+  #drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(social_class, n)), fill = "#48c78a") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Social Class",
+    x = "Social Class Category",
+    y = "Customers")
+
+# Education - Notable amount customers graduated MBO 2, 3, 4 of MBO before 1998
+customers %>% 
+  tabyl(education) %>%
+  adorn_pct_formatting(digits = 1) %>% 
+  adorn_totals()
+
+customers %>%
+  tabyl(education) %>%
+  #drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(education, n)), fill = "#1a6b89") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Education Levels",
+    x = "Education Category",
+    y = "Customers")
+
+# Life stage - 30% empty nesters, 14% mature singles, 14% mature families
+customers %>%
+  tabyl(life_stage) %>%
+  drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(life_stage, n)), fill = "#1a6b89") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Life Stages",
+    x = "Life Stage Category",
+    y = "Customers")
+
+customers %>% 
+  tabyl(life_stage) %>%
+  adorn_pct_formatting(digits = 1) %>% 
+  adorn_totals()
+
+
+```
+
+LOAD IN ADDITIONAL DATA SETS
+```{r}
+purchase_by_device <- read_csv("purchase_by_device.csv")
+purchase_touchpoints <- read_csv("purchase_touchpoints.csv")
+own_purchases <- read_csv("own_purchases.csv")
+comp_purchases <- read_csv("comp_purchases.csv")
+journey_durations <- read_csv("journey_durations.csv")
+
+```
+
+
+BIVARIATE - JOURNEYS AND CONVERSIONS BY DEVICE, TOUCHPOINT CATEGORIES (CIC)
+```{r}
+# Journeys and conversions classified by device type, touchpoint category
+plot_data <- journeys %>%
+  count(device_type, touch_point_category, purchase) %>% 
+  group_by(touch_point_category, device_type) %>% 
+  mutate(percent = n/sum(n))
+
+ggplot(plot_data, aes(x = device_type, y = percent, fill = purchase)) + 
+  geom_col(position = "fill") + 
+  geom_label(aes(label = percent(percent)), position = "fill", color = "white", vjust = 1, show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  facet_grid(~touch_point_category) +
+  scale_fill_manual(values=c("#1a6b89", "#dc6f6f", "#48c78a")) +
+  labs(
+    x = "Device Type",
+    y = "Amount of Touchpoints") + theme_classic(base_size = 20)
+  
+```
+
+
+BIVARIATE - JOURNEYS AND CONVERSIONS BY SPECIFIC TOUCHPOINT TYPES
+```{r}
+# Bar chart - touchpoint category type distributions
+journeys %>%
+  tabyl(touchpoint_group) %>%
+  drop_na() %>%
+  arrange(n) %>%
+  ggplot() + geom_col(aes(y = n, x = reorder(touchpoint_group, n)), fill = "#dc6f6f") + coord_flip() +
+  theme_classic(base_size = 16) +
+  labs(
+    title = "Distribution of Customer-Initiated Touchpoint Types",
+    x = "Platform",
+    y = "Journeys")
+
+# Journeys and conversions classified by device type, touchpoint type (coded)
+plot_data_2 <- journeys %>%
+  drop_na() %>%
+  count(touch_point_channel, touchpoint_group, purchase) %>% 
+  group_by(touchpoint_group, touch_point_channel) %>% 
+  mutate(percent = n/sum(n))
+
+ggplot(plot_data_2, aes(x = touch_point_channel, y = percent, fill = purchase)) + 
+  geom_col(position = "fill") + 
+  geom_label(aes(label = percent(percent)), position = "fill", color = "white", vjust = 1, show.legend = FALSE) +
+  scale_y_continuous(labels = percent) +
+  facet_grid(~touchpoint_group) +
+  scale_fill_manual(values=c("#1a6b89", "#dc6f6f", "#48c78a")) +
+  theme_classic(base_size = 18) +
+  labs(
+    x = "Channel",
+    y = "Amount of Touchpoints")
+```
+
+
+```{r}
+journeys %>%
+  filter(purchase == "Own") %>%
+  ggplot() + geom_bar(aes(x = purchase_own, fill = touchpoint_group)) +
+  theme_classic() +
+  scale_fill_manual(values=c("#dc6f6f", "#f78a8a", "#F5BDBD", "#1a6b89", "#48c78a")) +
+  labs(
+      title = "No. Touchpoints Led to Purchase",
+      x = "Own Purchases",
+      y = "Amount of Touchpoints")
+  
+
+
+ggplot(journeys, aes(x = purchase_own, fill = touchpoint_group)) +
+    geom_bar() +
+    theme_classic() +
+    scale_fill_manual(values=c("#dc6f6f", "#f78a8a", "#F5BDBD", "#1a6b89", "#48c78a")) +
+    labs(
+      title = "No. Touchpoints Led to Purchase",
+    x = "Purchases",
+    y = "Amount of Touchpoints")
+
+
+table(journeys$touchpoint_group)
+
+
+
+
+```
+
+BIVARIATE - CLASSIFYING BY JOURNEY DURATION, TOUCHPOINT TYPE
+```{r}
+# Histograms - journey durations grouped by touchpoint type (for top used touchpoint platforms)
+journeys %>%
+  filter(purchase == "Own" | purchase == "Competitor") %>%
+  filter(touchpoint_group == "Accommodations" | touchpoint_group == "Travel - Competitor") %>%
+  drop_na() %>%
+  ggplot() + geom_histogram(aes(duration), fill = "#dc6f6f") +
+  facet_wrap(touchpoint_group~., scales="free") +
+  theme_classic(base_size = 20) +
+  labs(
+    x = "Seconds",
+    y = "Journeys")
+  
+```
+
+
+COMBINE JOURNEYS AND CUSTOMERS DATA SETS
+```{r}
+# Join both data sets on user ID
+journeys %>%
+  left_join(customers, by = c("UserID" = "UserID")) %>%
+  {.} -> journeys.customers
+```
+
+JOURNEY AND DEMOGRAPHIC ATTRIBUTES FOR CONVERTED CUSTOMERS
+```{r}
+# Demographic distributions for competitor bookings
+journeys.customers %>%
+  filter(purchase == "Competitor") %>%
+  drop_na() %>% 
+  #filter(touchpoint_group == "Flights" | touchpoint_group == "Information") %>%
+  ggplot() + geom_histogram(aes(employment), fill = "#1a6b89", bins = 30) +
+  facet_wrap(touchpoint_group~., scales="free") +
+  theme_classic(base_size = 20) +
+  labs(
+    x = "Employment Category",
+    y = "Journeys")
+
+# Demographic distributions for own bookings
+journeys.customers %>%
+  filter(purchase == "Own") %>%
+  drop_na() %>% 
+  #filter(touchpoint_group == "Flights" | touchpoint_group == "Information") %>%
+  ggplot() + geom_histogram(aes(employment), fill = "#48c78a", bins = 30) +
+  facet_wrap(touchpoint_group~., scales="free") +
+  theme_classic(base_size = 20) +
+  labs(
+    x = "Employment Category",
+    y = "Journeys")
+```
+
+
+```{r}
+table(journeys$touch_point_category)
+
+
+journeys %>%
+  drop_na() %>%
+  filter(purchase == "Own") %>%
+  filter(touchpoint_group == "Accommodations") %>%
+  count()
+
+```
+
+
